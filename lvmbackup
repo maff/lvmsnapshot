@@ -28,15 +28,18 @@
 LVMPATH=/dev/lvmstore
 
 # LVM extension
+# An extension which all LVM Volumes share, will be appended to the Volume name
 LVMEXTENSION="-disk"
 
 # Mount path
+# Path where snapshots will be mounted to
 MOUNTPATH=/mnt/lvm
 
 # Snapshot size
 SNAPSHOTSIZE=5G
 
 # Identifier
+# An identifier which will be used to name the snapshots
 IDENTIFIER=backupscript
 
 #=====================================================================
@@ -115,8 +118,8 @@ if [ -z $2 ]; then
   exit 1
 fi
 
-LVMVOLUME=$LVMPATH/$2-disk
-LVMSNAPSHOT=$2-disk-snapshot-$IDENTIFIER
+LVMVOLUME=$LVMPATH/${2}${LVMEXTENSION}
+LVMSNAPSHOT=${2}${LVMEXTENSION}-snapshot-$IDENTIFIER
 SNAPSHOTMOUNT=$MOUNTPATH/$2
 
 #=====================================================================
