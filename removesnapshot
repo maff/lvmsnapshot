@@ -1,0 +1,62 @@
+#!/bin/bash
+COMMON=common
+
+if [ ! -f "$COMMON" ] ; then
+  error "'$COMMON' not found."
+elif [ ! -r "$COMMON" ] ; then
+  error "'$COMMON' not readable."
+else
+  . $COMMON
+fi
+
+echo -ne "Checking if $LVMVOLUME is mounted..."
+
+checkmount $SNAPSHOTMOUNT
+rc=$?
+if [ $rc -eq 1 ]; then
+  echo "Yes"
+else
+  echo "No...Aborting"
+  error "Volume is mounted. Please unmount and re-run."
+fi
+
+echo -ne "Checking availability of Volume '$LVMVOLUME'..."
+
+lvdisplay $LVMVOLUME > /dev/null
+rc=$?
+if [ $rc -ne 0 ]; then
+  echo "Not available"
+  error "Volume '$LVMVOLUME' does not exist."
+fi
+
+echo "OK"
+
+echo "Unmounting LVM snapshot after backup..."
+umount $SNAPSHOTMOUNT
+rc=$?
+if [ $rc -ne 0 ]; then
+  echo "Error on unmounting LVM snapshot"
+  echo "Please unmount and remove LVM snapshot manually!"
+  exit
+else
+  echo -ne "  Deleting mount directory at $SNAPSHOTMOUNT..."
+  rm -rf $SNAPSHOTMOUNT
+  rc=$?
+  if [ $rc -eq 0 ]; then
+    echo "OK"
+  else
+    echo "Error"
+    exit
+  fi
+fi
+echo "...successful"
+echo
+echo "Deleting LVM snapshot $LVMSNAPSHOT"
+lvremove -f $LVMPATH/$LVMSNAPSHOT
+rc=$?
+if [ $rc -ne 0 ]; then         # if error clean up
+  echo "Error on deleting LVM snapshot"
+  echo "Please delete LVM snapshot manually"
+  exit
+fi
+echo "...successful"
