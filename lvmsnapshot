@@ -244,5 +244,9 @@ elif [ $1 = "remove" ]; then
     exit
   fi
   echo "...successful"
+else
+  echo "Unknown command: $1"
+  echo
+  usage_info
 fi
 exit
