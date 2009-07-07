@@ -1,5 +1,5 @@
 #!/bin/bash
-COMMON=common
+COMMON=`dirname $0`/common
 
 if [ ! -f "$COMMON" ] ; then
   error "'$COMMON' not found."

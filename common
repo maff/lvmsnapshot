@@ -1,5 +1,5 @@
 #configuration
-CONF=conf
+CONF=`dirname $0`/conf
 
 function separator {
   echo "--- $@ ---"
