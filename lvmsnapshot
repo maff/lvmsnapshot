@@ -60,7 +60,7 @@ ME_VERSION="0.1"
 #=====================================================================
 
 function error {
-  echo -e "\nSorry. A fatal error occured:\n\n$@"
+  echo -e "\n--- Fatal error: $@ ---"
   exit -1
 }
 
@@ -71,6 +71,21 @@ function checkmount {
   else
     return 0
   fi
+}
+
+function checkvolume {
+  echo "Checking availability of Volume '$@'..."
+  echo -ne "  "
+
+  lvdisplay $@ > /dev/null
+  rc=$?
+  if [ $rc -ne 0 ]; then
+    echo "...not available"
+    error "Volume '$LVMVOLUME' does not exist."
+  fi
+
+  echo "...successful"
+  echo
 }
 
 function usage_info {
@@ -143,17 +158,7 @@ if [ $1 = "create" ]; then
     echo "No"
   fi
 
-  echo -ne "Checking availability of Volume '$LVMVOLUME'..."
-
-  lvdisplay $LVMVOLUME > /dev/null
-  rc=$?
-  if [ $rc -ne 0 ]; then
-    echo "Not available"
-    error "Volume '$LVMVOLUME' does not exist."
-  fi
-
-  echo "OK"
-  echo
+  checkvolume $LVMVOLUME
 
   echo "Creating LVM snapshot at $LVMPATH/$LVMSNAPSHOT..."
   lvcreate -L $SNAPSHOTSIZE -s -n $LVMSNAPSHOT $LVMVOLUME
@@ -203,17 +208,7 @@ elif [ $1 = "remove" ]; then
     error "Volume is mounted. Please unmount and re-run."
   fi
 
-  echo -ne "Checking availability of Volume '$LVMVOLUME'..."
-
-  lvdisplay $LVMVOLUME > /dev/null
-  rc=$?
-  if [ $rc -ne 0 ]; then
-    echo "Not available"
-    error "Volume '$LVMVOLUME' does not exist."
-  fi
-
-  echo "OK"
-  echo
+  checkvolume $LVMVOLUME
 
   echo "Unmounting LVM snapshot after backup..."
   umount $SNAPSHOTMOUNT
