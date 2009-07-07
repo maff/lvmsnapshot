@@ -42,7 +42,7 @@ if [ $rc -eq 0 ]; then
   if [ -d $SNAPSHOTMOUNT ]; then
     echo "  Mount directory exists, ommiting mkdir..."
   else
-    echo -ne "  Creating mount directory at $MOUNTPATH/$LVMSNAPSHOT..."
+    echo -ne "  Creating mount directory at $SNAPSHOTMOUNT..."
     mkdir -p $SNAPSHOTMOUNT
     if [ $rc -eq 0 ]; then
       echo "OK"
