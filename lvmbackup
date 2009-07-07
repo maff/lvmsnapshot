@@ -153,12 +153,13 @@ if [ $1 = "create" ]; then
   fi
 
   echo "OK"
+  echo
 
   echo "Creating LVM snapshot at $LVMPATH/$LVMSNAPSHOT..."
   lvcreate -L $SNAPSHOTSIZE -s -n $LVMSNAPSHOT $LVMVOLUME
   rc=$?
   if [ $rc -eq 0 ]; then
-    echo "Snapshot created successfully"
+    echo "...successful"
     echo
     echo "Mounting LVM snapshot for backup..."  
 
@@ -181,7 +182,7 @@ if [ $1 = "create" ]; then
       lvremove -f $LVMPATH/$LVMSNAPSHOT
       error "Error on mounting LVM snapshot"
     fi
-    echo "Snapshot mounted successfully"
+    echo "...successful"
   else
     error "Error on creating LVM snapshot"
   fi
@@ -212,6 +213,7 @@ elif [ $1 = "remove" ]; then
   fi
 
   echo "OK"
+  echo
 
   echo "Unmounting LVM snapshot after backup..."
   umount $SNAPSHOTMOUNT
