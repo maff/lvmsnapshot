@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# LVM Backup Script
+# LVM Snapshot & Mount Script
 # VER. 0.1
 # Copyright (c) 2009 Mathias Geat <mathias@ailoo.net>
 #
@@ -23,7 +23,7 @@
 # Set the following variables to your system needs
 #=====================================================================
 
-# LVM base path
+# LVM base path (Volume Group)
 LVMPATH=/dev/lvmstore
 
 # LVM extension
@@ -38,8 +38,9 @@ MOUNTPATH=/mnt/lvm
 SNAPSHOTSIZE=5G
 
 # Identifier
-# An identifier which will be used to name the snapshots
-IDENTIFIER=backupscript
+# An identifier which will be appended every snapshot
+# (useful to distinguish automatic backups from others)
+IDENTIFIER=lvmsnapshot
 
 #=====================================================================
 #=====================================================================
