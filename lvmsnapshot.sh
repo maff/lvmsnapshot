@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # LVM Snapshot & Mount Script
-# VER. 0.1
+# VER. 0.1.1
 # Copyright (c) 2009 Mathias Geat <mathias@ailoo.net>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -59,7 +59,7 @@ IDENTIFIER=lvmsnapshot
 #=====================================================================
 
 ME=$(basename $0)
-ME_VERSION="0.1"
+ME_VERSION="0.1.1"
 
 #=====================================================================
 # Common functions
