@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # LVM Snapshot & Mount Script
-# VER. 0.1.1
+# Version 0.1.2
 # Copyright (c) 2009 Mathias Geat <mathias@ailoo.net>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -22,6 +22,7 @@
 # Changelog
 #=====================================================================
 #
+# 0.1.2         Add config options for needed commands
 # 0.1.1         Bugfix for "lvdisplay not found"
 # 0.1           Initial release
 #
@@ -48,6 +49,15 @@ SNAPSHOTSIZE=5G
 # (useful to distinguish automatic backups from others)
 IDENTIFIER=lvmsnapshot
 
+# Paths to needed commands
+CMD_LVDISPLAY=/sbin/lvdisplay
+CMD_LVCREATE=/sbin/lvcreate
+CMD_LVREMOVE=/sbin/lvremove
+CMD_MOUNT=/bin/mount
+CMD_UMOUNT=/bin/umount
+CMD_GREP=/bin/grep
+CMD_WC=/usr/bin/wc
+
 #=====================================================================
 #=====================================================================
 #=====================================================================
@@ -59,7 +69,7 @@ IDENTIFIER=lvmsnapshot
 #=====================================================================
 
 ME=$(basename $0)
-ME_VERSION="0.1.1"
+ME_VERSION="0.1.2"
 
 #=====================================================================
 # Common functions
@@ -71,7 +81,7 @@ function error {
 }
 
 function checkmount {
-  LINES=`mount | grep $@ | wc -l`
+  LINES=`$CMD_MOUNT | $CMD_GREP $@ | $CMD_WC -l`
   if [ $LINES -gt 0 ]; then
     return 1
   else
@@ -83,7 +93,7 @@ function checkvolume {
   echo "Checking availability of Volume '$@'..."
   echo -ne "  "
 
-  /sbin/lvdisplay $@ > /dev/null
+  $CMD_LVDISPLAY $@ > /dev/null
   rc=$?
   if [ $rc -ne 0 ]; then
     echo "...not available"
@@ -167,7 +177,7 @@ if [ $1 = "create" ]; then
   checkvolume $LVMVOLUME
 
   echo "Creating LVM snapshot at $LVMPATH/$LVMSNAPSHOT..."
-  lvcreate -L $SNAPSHOTSIZE -s -n $LVMSNAPSHOT $LVMVOLUME
+  $CMD_LVCREATE -L $SNAPSHOTSIZE -s -n $LVMSNAPSHOT $LVMVOLUME
   rc=$?
   if [ $rc -eq 0 ]; then
     echo "...successful"
@@ -187,10 +197,10 @@ if [ $1 = "create" ]; then
       fi    
     fi
     
-    mount $LVMPATH/$LVMSNAPSHOT $SNAPSHOTMOUNT
+    $CMD_MOUNT $LVMPATH/$LVMSNAPSHOT $SNAPSHOTMOUNT
     rc=$?
     if [ $rc -ne 0 ]; then
-      lvremove -f $LVMPATH/$LVMSNAPSHOT
+      $CMD_LVREMOVE -f $LVMPATH/$LVMSNAPSHOT
       error "Error on mounting LVM snapshot"
     fi
     echo "...successful"
@@ -217,7 +227,7 @@ elif [ $1 = "remove" ]; then
   checkvolume $LVMVOLUME
 
   echo "Unmounting LVM snapshot after backup..."
-  umount $SNAPSHOTMOUNT
+  $CMD_UMOUNT $SNAPSHOTMOUNT
   rc=$?
   if [ $rc -ne 0 ]; then
     echo "Error on unmounting LVM snapshot"
@@ -237,7 +247,7 @@ elif [ $1 = "remove" ]; then
   echo "...successful"
   echo
   echo "Deleting LVM snapshot $LVMSNAPSHOT"
-  lvremove -f $LVMPATH/$LVMSNAPSHOT
+  $CMD_LVREMOVE -f $LVMPATH/$LVMSNAPSHOT
   rc=$?
   if [ $rc -ne 0 ]; then
     echo "Error on deleting LVM snapshot"
