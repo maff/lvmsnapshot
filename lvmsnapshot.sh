@@ -77,7 +77,7 @@ function checkvolume {
   echo "Checking availability of Volume '$@'..."
   echo -ne "  "
 
-  lvdisplay $@ > /dev/null
+  /sbin/lvdisplay $@ > /dev/null
   rc=$?
   if [ $rc -ne 0 ]; then
     echo "...not available"
