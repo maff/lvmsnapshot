@@ -22,6 +22,7 @@
 # Changelog
 #=====================================================================
 #
+# 0.1.3         Fix wrong debug output in remove action
 # 0.1.2         Add config options for needed commands
 # 0.1.1         Bugfix for "lvdisplay not found"
 # 0.1           Initial release
@@ -213,7 +214,7 @@ elif [ $1 = "remove" ]; then
   # Remove Snapshot
   #=====================================================================
 
-  echo -ne "Checking if $LVMVOLUME is mounted..."
+  echo -ne "Checking if $LVMPATH/$LVMSNAPSHOT is mounted..."
 
   checkmount $SNAPSHOTMOUNT
   rc=$?
@@ -221,7 +222,7 @@ elif [ $1 = "remove" ]; then
     echo "Yes"
   else
     echo "No...Aborting"
-    error "Volume is mounted. Please unmount and re-run."
+    error "Volume is not mounted. Please mount and re-run."
   fi
 
   checkvolume $LVMVOLUME
