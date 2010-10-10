@@ -67,8 +67,8 @@ else
 
     # Identifier
     # An identifier which will be appended every snapshot
-    # (useful to distinguish automatic backups from others)
-    IDENTIFIER=lvmsnapshot
+    # (make sure you set a value!)
+    IDENTIFIER="-snapshot-lvmsnapshot"
 
     # Paths to needed commands
     WHICH="`which which`"
@@ -79,6 +79,7 @@ else
     UMOUNT="`${WHICH} umount`"
     GREP="`${WHICH} grep`"
     WC="`${WHICH} wc`"
+    RM="`${WHICH} rm`"
 
     ### END CFG ###
 fi
@@ -94,7 +95,7 @@ fi
 #=====================================================================
 
 ME=$(basename $0)
-ME_VERSION="0.1.2"
+ME_VERSION="0.2"
 
 #=====================================================================
 # Set up shell
@@ -114,33 +115,59 @@ fi
 # Common functions
 #=====================================================================
 
+function echo_success {
+    echo -ne "${COL_SUCCESS}$@${COL_NORMAL}"
+}
+
+function echo_error {
+    echo -ne "${COL_FAILURE}$@${COL_NORMAL}"
+}
+
+function status_success {
+    echo -ne "${COL_SUCCESS}$@${COL_NORMAL}\n"
+}
+
+function status_failure {
+    echo -ne "${COL_FAILURE}$@${COL_NORMAL}\n"
+}
+
 function error {
-    echo -e "${COL_FAILURE}$@${COL_NORMAL}" 2>&1
+    echo -ne "\n" 2>&1
+    echo_error "ERROR: $@" 2>&1
+    echo -ne "\n" 2>&1
     exit 1
 }
 
 function checkmount {
     LINES=`$MOUNT | $GREP $@ | $WC -l`
     if [ $LINES -gt 0 ]; then
-        return 1
-    else
         return 0
+    else
+        return 1
     fi
 }
 
 function checkvolume {
-    echo "Checking availability of Volume '$@'..."
-    echo -ne "  "
+    echo -ne "Checking availability of volume..."
 
-    $LVDISPLAY $@ > /dev/null
-    rc=$?
-    if [ $rc -ne 0 ]; then
-        echo "...not available"
+    $LVDISPLAY $@ > /dev/null 2>&1
+    if [ $? -ne 0  ]; then
+        status_failure "failed"
         error "Volume '$LVMVOLUME' does not exist."
+    else
+        status_success "ok"
     fi
+}
 
-    echo "...successful"
-    echo
+function cleanup {
+    echo -ne "Deleting mount directory at $MOUNTPOINT..."
+    $RM -rf $MOUNTPOINT
+
+    if [ $? -eq 0 ]; then
+        status_success "ok"
+    else
+        status_failure "failed"
+    fi
 }
 
 function usage_info {
@@ -190,15 +217,25 @@ if [ -z $1 ]; then
 fi
 
 if [ -z $2 ]; then
-    echo "Please specify a LVM Volume name."
+    echo "Please specify a volume name."
     echo
     usage_info
     exit 1
 fi
 
+MOUNTPOINT=$MOUNTPATH/$2
 LVMVOLUME=$LVMPATH/${2}${LVMEXTENSION}
-LVMSNAPSHOT=${2}${LVMEXTENSION}-snapshot-$IDENTIFIER
-SNAPSHOTMOUNT=$MOUNTPATH/$2
+LVMSNAPSHOT=${2}${LVMEXTENSION}${IDENTIFIER}
+
+    cat <<END
+SETTINGS:
+  MOUNTPOINT:   $MOUNTPOINT
+  LVMVOLUME:    $LVMVOLUME
+  LVMSNAPSHOT:  $LVMSNAPSHOT
+
+END
+
+checkvolume $LVMVOLUME
 
 #=====================================================================
 # Program logic
@@ -210,55 +247,50 @@ if [ $1 = "create" ]; then
     # Create Snapshot
     #=====================================================================
 
-    echo -ne "Checking if $LVMVOLUME is mounted..."
+    echo -ne "Checking if mountpoint is mounted..."
 
-    checkmount $SNAPSHOTMOUNT
-    rc=$?
-
-    if [ $rc -eq 1 ]; then
-        echo "Yes...Aborting"
-        error "Volume is mounted. Please unmount and re-run."
+    checkmount $MOUNTPOINT
+    if [ $? -eq 0 ]; then
+        status_failure "yes"
+        error "Mountpoint is mounted. Please unmount and re-run."
     else
-        echo "No"
+        status_success "no"
     fi
 
-    checkvolume $LVMVOLUME
+    echo -ne "Creating snapshot..."
+    $LVCREATE -L $SNAPSHOTSIZE -s -n $LVMSNAPSHOT $LVMVOLUME > /dev/null 2>&1
 
-    echo "Creating LVM snapshot at $LVMPATH/$LVMSNAPSHOT..."
-    $LVCREATE -L $SNAPSHOTSIZE -s -n $LVMSNAPSHOT $LVMVOLUME
-    rc=$?
+    if [ $? -eq 0 ]; then
+        status_success "ok"
 
-    if [ $rc -eq 0 ]; then
-        echo "...successful"
-        echo
-        echo "Mounting LVM snapshot for backup..."
+        if [ -d $MOUNTPOINT ]; then
+            echo "Mount directory exists, ommiting mkdir."
+        else
+            echo -ne "Creating mountpoint directory..."
 
-        if [ -d $SNAPSHOTMOUNT ]; then
-            echo "  Mount directory exists, ommiting mkdir..."
+            mkdir -p $MOUNTPOINT
+            if [ $? -eq 0 ]; then
+                status_success "ok"
             else
-            echo -ne "  Creating mount directory at $SNAPSHOTMOUNT..."
-
-            mkdir -p $SNAPSHOTMOUNT
-
-            if [ $rc -eq 0 ]; then
-                echo "OK"
-                else
-                echo "Error"
-                error "Error on creating mount directory"
+                status_failure "failed"
+                error "Error while creating mountpoint directory."
             fi
         fi
 
-        $MOUNT $LVMPATH/$LVMSNAPSHOT $SNAPSHOTMOUNT
-        rc=$?
+        echo -ne "Mounting snapshot..."
+        $MOUNT $LVMPATH/$LVMSNAPSHOT $MOUNTPOINT
 
-        if [ $rc -ne 0 ]; then
-            $LVREMOVE -f $LVMPATH/$LVMSNAPSHOT
-            error "Error on mounting LVM snapshot"
+        if [ $? -eq 0 ]; then
+            status_success "ok"
+            exit 0
+        else
+            status_failure "failed"
+            cleanup
+            error "Error while mounting snapshot."
         fi
-
-        echo "...successful"
     else
-        error "Error on creating LVM snapshot"
+        status_failure "failed"
+        error "Error while creating snapshot."
     fi
 
 elif [ $1 = "remove" ]; then
@@ -267,58 +299,39 @@ elif [ $1 = "remove" ]; then
     # Remove Snapshot
     #=====================================================================
 
-    echo -ne "Checking if $LVMPATH/$LVMSNAPSHOT is mounted..."
+    echo -ne "Checking if mountpoint is mounted..."
 
-    checkmount $SNAPSHOTMOUNT
-    rc=$?
-
-    if [ $rc -eq 1 ]; then
-        echo "Yes"
-        else
-        echo "No...Aborting"
-        error "Volume is not mounted. Please mount and re-run."
-    fi
-
-    checkvolume $LVMVOLUME
-
-    echo "Unmounting LVM snapshot after backup..."
-    $UMOUNT $SNAPSHOTMOUNT
-    rc=$?
-
-    if [ $rc -ne 0 ]; then
-        echo "Error on unmounting LVM snapshot"
-        echo "Please unmount and remove LVM snapshot manually!"
-        exit 1
+    checkmount $MOUNTPOINT
+    if [ $? -eq 0 ]; then
+        status_success "yes"
     else
-        echo -ne "  Deleting mount directory at $SNAPSHOTMOUNT..."
-        rm -rf $SNAPSHOTMOUNT
-        rc=$?
+        status_failure "no"
+        error "Mountpoint is not mounted. Please mount and re-run."
+    fi
 
-        if [ $rc -eq 0 ]; then
-            echo "OK"
+    echo -ne "Unmounting snapshot..."
+    $UMOUNT $MOUNTPOINT
+
+    if [ $? -eq 0 ]; then
+        status_success "ok"
+
+        cleanup
+
+        echo -ne "Removing snapshot..."
+        $LVREMOVE -f $LVMPATH/$LVMSNAPSHOT > /dev/null 2>&1
+
+        if [ $? -eq 0 ]; then
+            status_success "ok"
         else
-            echo "Error"
-            exit
+            status_failure "failed"
+            error "Error while removing snapshot, please remove manually."
         fi
+    else
+        status_failure "failed"
+        error "Error while unmounting snapshot."
     fi
-
-    echo "...successful"
-    echo
-
-    echo "Deleting LVM snapshot $LVMSNAPSHOT"
-    $LVREMOVE -f $LVMPATH/$LVMSNAPSHOT
-    rc=$?
-
-    if [ $rc -ne 0 ]; then
-        echo "Error on deleting LVM snapshot"
-        echo "Please delete LVM snapshot manually"
-        exit
-    fi
-
-    echo "...successful"
 
 else
-
     echo "Unknown command: $1"
     echo
     usage_info
