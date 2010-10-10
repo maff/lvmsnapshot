@@ -97,12 +97,26 @@ ME=$(basename $0)
 ME_VERSION="0.1.2"
 
 #=====================================================================
+# Set up shell
+#=====================================================================
+
+if tty -s; then
+    COL_SUCCESS="\\033[1;32m"
+    COL_FAILURE="\\033[1;31m"
+    COL_NORMAL="\\033[0;39m"
+else
+    COL_SUCCESS=""
+    COL_FAILURE=""
+    COL_NORMAL=""
+fi
+
+#=====================================================================
 # Common functions
 #=====================================================================
 
 function error {
-  echo -e "\n--- Fatal error: $@ ---"
-  exit -1
+  echo -e "${COL_FAILURE}$@${COL_NORMAL}" 2>&1
+  exit 1
 }
 
 function checkmount {
@@ -155,6 +169,14 @@ function version_info {
 
 END
 }
+
+#=====================================================================
+# Make sure only root can run our script
+#=====================================================================
+
+if [ "$(id -u)" != 0 ]; then
+    error "This script must be run as root"
+fi
 
 #=====================================================================
 # Parse params
