@@ -22,6 +22,11 @@
 # Changelog
 #=====================================================================
 #
+# ver 0.2       (2010-10-10)
+#       - Check if root is running the script
+#       - Improved error handling
+#       - Improved output
+#
 # ver 0.1.3     (2010-01-04)
 #       - Fix wrong debug output in remove action
 #
@@ -70,6 +75,9 @@ else
     # (make sure you set a value!)
     IDENTIFIER="-snapshot-lvmsnapshot"
 
+    # Colored output?
+    COLOR=1
+
     # Paths to needed commands
     WHICH="`which which`"
     LVDISPLAY="`${WHICH} lvdisplay`"
@@ -101,7 +109,7 @@ ME_VERSION="0.2"
 # Set up shell
 #=====================================================================
 
-if tty -s; then
+if `tty >/dev/null 2>&1` ; then
     COL_SUCCESS="\\033[1;32m"
     COL_FAILURE="\\033[1;31m"
     COL_NORMAL="\\033[0;39m"
