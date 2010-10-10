@@ -13,7 +13,7 @@
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
@@ -22,42 +22,66 @@
 # Changelog
 #=====================================================================
 #
-# 0.1.3         Fix wrong debug output in remove action
-# 0.1.2         Add config options for needed commands
-# 0.1.1         Bugfix for "lvdisplay not found"
-# 0.1           Initial release
+# ver 0.1.3     (2010-01-04)
+#       - Fix wrong debug output in remove action
+#
+# ver 0.1.2     (2009-07-09)
+#       - Add config options for needed commands
+#
+# ver 0.1.1     (2009-07-09)
+#       - Bugfix for "lvdisplay not found"
+#
+# ver 0.1       (2009-07-08)
+#       - Initial release
 #
 #=====================================================================
 # Set the following variables to your system needs
 #=====================================================================
 
-# LVM base path (Volume Group)
-LVMPATH=/dev/lvmstore
+CONFIGFILE="/etc/lvmsnapshot/lvmsnapshot.conf"
 
-# LVM extension
-# An extension which all LVM Volumes share, will be appended to the Volume name
-LVMEXTENSION="-disk"
+if [ -r ${CONFIGFILE} ]; then
+    # Read the configfile if it's existing and readable
+    source ${CONFIGFILE}
+else
+    # do inline-config otherwise
+    # To create a configfile just copy the code between "### START CFG ###" and "### END CFG ###"
+    # to /etc/lvmsnapshot/lvmsnapshot.conf. After that you're able to upgrade this script
+    # (copy a new version to its location) without the need for editing it.
 
-# Mount path
-# Path where snapshots will be mounted to
-MOUNTPATH=/mnt/lvm
+    ### START CFG ###
 
-# Snapshot size
-SNAPSHOTSIZE=5G
+    # LVM base path (Volume Group)
+    LVMPATH=/dev/lvmstore
 
-# Identifier
-# An identifier which will be appended every snapshot
-# (useful to distinguish automatic backups from others)
-IDENTIFIER=lvmsnapshot
+    # LVM extension
+    # An extension which all LVM Volumes share, will be appended to the Volume name
+    LVMEXTENSION="-disk"
 
-# Paths to needed commands
-CMD_LVDISPLAY=/sbin/lvdisplay
-CMD_LVCREATE=/sbin/lvcreate
-CMD_LVREMOVE=/sbin/lvremove
-CMD_MOUNT=/bin/mount
-CMD_UMOUNT=/bin/umount
-CMD_GREP=/bin/grep
-CMD_WC=/usr/bin/wc
+    # Mount path
+    # Path where snapshots will be mounted to
+    MOUNTPATH=/mnt/lvm
+
+    # Snapshot size
+    SNAPSHOTSIZE=1G
+
+    # Identifier
+    # An identifier which will be appended every snapshot
+    # (useful to distinguish automatic backups from others)
+    IDENTIFIER=lvmsnapshot
+
+    # Paths to needed commands
+    WHICH="`which which`"
+    LVDISPLAY="`${WHICH} lvdisplay`"
+    LVCREATE="`${WHICH} lvcreate`"
+    LVREMOVE="`${WHICH} lvremove`"
+    MOUNT="`${WHICH} mount`"
+    UMOUNT="`${WHICH} umount`"
+    GREP="`${WHICH} grep`"
+    WC="`${WHICH} wc`"
+
+    ### END CFG ###
+fi
 
 #=====================================================================
 #=====================================================================
@@ -82,7 +106,7 @@ function error {
 }
 
 function checkmount {
-  LINES=`$CMD_MOUNT | $CMD_GREP $@ | $CMD_WC -l`
+  LINES=`$MOUNT | $GREP $@ | $WC -l`
   if [ $LINES -gt 0 ]; then
     return 1
   else
@@ -94,7 +118,7 @@ function checkvolume {
   echo "Checking availability of Volume '$@'..."
   echo -ne "  "
 
-  $CMD_LVDISPLAY $@ > /dev/null
+  $LVDISPLAY $@ > /dev/null
   rc=$?
   if [ $rc -ne 0 ]; then
     echo "...not available"
@@ -109,16 +133,16 @@ function usage_info {
   cat <<USAGE
 VERSION:
 $(version_info)
-  
-DESCRIPTION: 
+
+DESCRIPTION:
   Automated creation and removal of LVM snapshots.
-  
+
   LVM VG:         ${LVMPATH}
   MOUNT PATH:     ${MOUNTPATH}
-      
+
 USAGE:
     $ME <command> <lvmvolume>
-             
+
 COMMANDS:
   create:     create a LVM snapshot and mount to MOUNT PATH
   remove:     remove a LVM snapshot
@@ -178,12 +202,12 @@ if [ $1 = "create" ]; then
   checkvolume $LVMVOLUME
 
   echo "Creating LVM snapshot at $LVMPATH/$LVMSNAPSHOT..."
-  $CMD_LVCREATE -L $SNAPSHOTSIZE -s -n $LVMSNAPSHOT $LVMVOLUME
+  $LVCREATE -L $SNAPSHOTSIZE -s -n $LVMSNAPSHOT $LVMVOLUME
   rc=$?
   if [ $rc -eq 0 ]; then
     echo "...successful"
     echo
-    echo "Mounting LVM snapshot for backup..."  
+    echo "Mounting LVM snapshot for backup..."
 
     if [ -d $SNAPSHOTMOUNT ]; then
       echo "  Mount directory exists, ommiting mkdir..."
@@ -195,13 +219,13 @@ if [ $1 = "create" ]; then
       else
         echo "Error"
         error "Error on creating mount directory"
-      fi    
+      fi
     fi
-    
-    $CMD_MOUNT $LVMPATH/$LVMSNAPSHOT $SNAPSHOTMOUNT
+
+    $MOUNT $LVMPATH/$LVMSNAPSHOT $SNAPSHOTMOUNT
     rc=$?
     if [ $rc -ne 0 ]; then
-      $CMD_LVREMOVE -f $LVMPATH/$LVMSNAPSHOT
+      $LVREMOVE -f $LVMPATH/$LVMSNAPSHOT
       error "Error on mounting LVM snapshot"
     fi
     echo "...successful"
@@ -228,7 +252,7 @@ elif [ $1 = "remove" ]; then
   checkvolume $LVMVOLUME
 
   echo "Unmounting LVM snapshot after backup..."
-  $CMD_UMOUNT $SNAPSHOTMOUNT
+  $UMOUNT $SNAPSHOTMOUNT
   rc=$?
   if [ $rc -ne 0 ]; then
     echo "Error on unmounting LVM snapshot"
@@ -248,7 +272,7 @@ elif [ $1 = "remove" ]; then
   echo "...successful"
   echo
   echo "Deleting LVM snapshot $LVMSNAPSHOT"
-  $CMD_LVREMOVE -f $LVMPATH/$LVMSNAPSHOT
+  $LVREMOVE -f $LVMPATH/$LVMSNAPSHOT
   rc=$?
   if [ $rc -ne 0 ]; then
     echo "Error on deleting LVM snapshot"
