@@ -26,6 +26,7 @@
 #       - Check if root is running the script
 #       - Improved error handling
 #       - Improved output
+#       - Optional config file
 #
 # ver 0.1.3     (2010-01-04)
 #       - Fix wrong debug output in remove action
@@ -74,9 +75,6 @@ else
     # An identifier which will be appended every snapshot
     # (make sure you set a value!)
     IDENTIFIER="-snapshot-lvmsnapshot"
-
-    # Colored output?
-    COLOR=1
 
     # Paths to needed commands
     WHICH="`which which`"
