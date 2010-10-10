@@ -134,17 +134,17 @@ function usage_info {
 VERSION:
 $(version_info)
 
+LVM VG:     ${LVMPATH}
+MOUNT PATH: ${MOUNTPATH}
+
 DESCRIPTION:
   Automated creation and removal of LVM snapshots.
 
-  LVM VG:         ${LVMPATH}
-  MOUNT PATH:     ${MOUNTPATH}
-
 USAGE:
-    $ME <command> <lvmvolume>
+  $ME <command> <lvmvolume>
 
 COMMANDS:
-  create:     create a LVM snapshot and mount to MOUNT PATH
+  create:     create a LVM snapshot and mount to MOUNTPATH
   remove:     remove a LVM snapshot
 USAGE
 }
