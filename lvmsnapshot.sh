@@ -22,7 +22,7 @@
 # Changelog
 #=====================================================================
 #
-# ver 0.2       (2010-10-10)
+# ver 0.2       (2010-10-12)
 #       - Check if root is running the script
 #       - Improved error handling
 #       - Improved output
