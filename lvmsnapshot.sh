@@ -77,15 +77,14 @@ else
     IDENTIFIER="-snapshot-lvmsnapshot"
 
     # Paths to needed commands
-    WHICH="`which which`"
-    LVDISPLAY="`${WHICH} lvdisplay`"
-    LVCREATE="`${WHICH} lvcreate`"
-    LVREMOVE="`${WHICH} lvremove`"
-    MOUNT="`${WHICH} mount`"
-    UMOUNT="`${WHICH} umount`"
-    GREP="`${WHICH} grep`"
-    WC="`${WHICH} wc`"
-    RM="`${WHICH} rm`"
+    LVDISPLAY=/sbin/lvdisplay
+    LVCREATE=/sbin/lvcreate
+    LVREMOVE=/sbin/lvremove
+    MOUNT=/bin/mount
+    UMOUNT=/bin/umount
+    GREP=/bin/grep
+    WC=/usr/bin/wc
+    RM=/bin/rm
 
     ### END CFG ###
 fi
