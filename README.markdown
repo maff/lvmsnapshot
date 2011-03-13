@@ -47,4 +47,4 @@ The script has changed a little since the blog post and now additionally support
 Configuration
 -------------
 
-You'll have to define some config values to match your environment first. The easiest way to do so is to create a config file in <code>/etc/lvmsnapshot/lvmsnapshot.conf</code> and setting the needed values for your environment there. For a list of available config values just see the default values section in the upper part of the script. Additionally you can set part of the config values with command line options or with a custom config file (see the </code>-c<code> option).
+You'll have to define some config values to match your environment first. The easiest way to do so is to create a config file in <code>/etc/lvmsnapshot/lvmsnapshot.conf</code> and setting the needed values for your environment there. For a list of available config values just see the default values section in the upper part of the script. Additionally you can set part of the config values with command line options or with a custom config file (see the <code>-c</code> option).
