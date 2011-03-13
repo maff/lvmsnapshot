@@ -1,8 +1,12 @@
-# lvmsnapshot #
+lvmsnapshot.sh
+==============
 
 A simple bashscript to automatically create and mount LVM snapshots. See this
 [post](http://maff.ailoo.net/2009/07/backup-virtual-machines-lvm-snapshots-ftplicity-duplicity/) for
 details.
+
+Usage
+-----
 
     ~# lvmsnapshot -h
     lvmsnapshot version 0.3
@@ -40,4 +44,7 @@ The script has changed a little since the blog post and now additionally support
     lvmsnapshot create vm01
     lvmsnapshot remove vm01
 
-However, you'll have to define some config values to match your environment first. The easiest way to do so is to create a config file in <kbd>/etc/lvmsnapshot/lvmsnapshot.conf</kbd> and setting the needed values for your environment there. For a list of available config values just see the default values section in the upper part of the script. Additionally you can set part of the config values with command line options or with a custom config file (see the -c option).
+Configuration
+-------------
+
+You'll have to define some config values to match your environment first. The easiest way to do so is to create a config file in <code>/etc/lvmsnapshot/lvmsnapshot.conf</code> and setting the needed values for your environment there. For a list of available config values just see the default values section in the upper part of the script. Additionally you can set part of the config values with command line options or with a custom config file (see the </code>-c<code> option).
