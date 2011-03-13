@@ -1,8 +1,10 @@
 #!/bin/bash
 #
 # LVM Snapshot & Mount Script
-# Version 0.2
-# Copyright (c) 2009 Mathias Geat <mathias@ailoo.net>
+# Version 0.3
+
+# Copyright (c) 2011 Mathias Geat <mathias@ailoo.net>
+# with additions by Felix Moche <felix@moches.de>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,6 +23,10 @@
 #=====================================================================
 # Changelog
 #=====================================================================
+#
+# ver 0.3       (2011-03-13)
+#       - Added snapshot/mount option for block volumes (KVM style)
+#       - Config options can be set in config file or on command line
 #
 # ver 0.2       (2010-10-12)
 #       - Check if root is running the script
@@ -41,66 +47,74 @@
 #       - Initial release
 #
 #=====================================================================
-# Set the following variables to your system needs
-#=====================================================================
-
-CONFIGFILE="/etc/lvmsnapshot/lvmsnapshot.conf"
-
-if [ -r ${CONFIGFILE} ]; then
-    # Read the configfile if it's existing and readable
-    source ${CONFIGFILE}
-else
-    # do inline-config otherwise
-    # To create a configfile just copy the code between "### START CFG ###" and "### END CFG ###"
-    # to /etc/lvmsnapshot/lvmsnapshot.conf. After that you're able to upgrade this script
-    # (copy a new version to its location) without the need for editing it.
-
-    ### START CFG ###
-
-    # LVM base path (Volume Group)
-    LVMPATH=/dev/lvmstore
-
-    # LVM extension
-    # An extension which all LVM Volumes share, will be appended to the Volume name
-    LVMEXTENSION="-disk"
-
-    # Mount path
-    # Path where snapshots will be mounted to
-    MOUNTPATH=/mnt/lvm
-
-    # Snapshot size
-    SNAPSHOTSIZE=1G
-
-    # Identifier
-    # An identifier which will be appended every snapshot
-    # (make sure you set a value!)
-    IDENTIFIER="-snapshot-lvmsnapshot"
-
-    # Paths to needed commands
-    LVDISPLAY=/sbin/lvdisplay
-    LVCREATE=/sbin/lvcreate
-    LVREMOVE=/sbin/lvremove
-    MOUNT=/bin/mount
-    UMOUNT=/bin/umount
-    GREP=/bin/grep
-    WC=/usr/bin/wc
-    RM=/bin/rm
-
-    ### END CFG ###
-fi
-
-#=====================================================================
-#=====================================================================
-#=====================================================================
-#
-# Should not need to be modified from here!
-#
-#=====================================================================
-#=====================================================================
-#=====================================================================
 
 ME=$(basename $0)
-ME_VERSION="0.2"
+ME_VERSION="0.3"
+
+EXIT_SUCCESS=0
+EXIT_FAILURE=1
+EXIT_ERROR=2
+EXIT_BUG=3
+
+# will override default config if file exists
+CONFIGFILE="/etc/lvmsnapshot/lvmsnapshot.conf"
+
+#=====================================================================
+# Default config values
+# These values can be overridden by command line options and/or by
+# config file (either in the above location or by using the -c option)
+#=====================================================================
+
+# Show debug output
+DEBUG=0
+
+# Don't show any output
+QUIET=0
+
+# Mode can be either partition (Xen style) or block (KVM style)
+# Partition will be mounted directly, while block will be mapped
+# with kpartx first and then mounted
+MODE=partition
+
+# Name of LVM volume group
+GROUPNAME=vmstore
+
+# LVM base path
+LVMPATH=/dev
+
+# LVM extension
+# An extension which all LVM Volumes share, will be appended to the Volume name
+LVMEXTENSION="-disk"
+
+# Mount path
+# Path where snapshots will be mounted to
+MOUNTPATH=/mnt/lvmsnapshot
+
+# Snapshot size
+SNAPSHOTSIZE=1G
+
+# Mapper base path
+MAPPERPATH=/dev/mapper
+
+# Number of mapped device (the number which will appended by kpartx to the
+# partition which should be mounted.
+MAPPERINDEX=1
+
+# Identifier
+# An identifier which will be appended to every snapshot
+# (make sure you set a value!)
+IDENTIFIER="-snapshot-lvmsnapshot"
+
+# Paths to needed commands
+LVDISPLAY=/sbin/lvdisplay
+LVCREATE=/sbin/lvcreate
+LVREMOVE=/sbin/lvremove
+MOUNT=/bin/mount
+UMOUNT=/bin/umount
+GREP=/bin/grep
+WC=/usr/bin/wc
+RM=/bin/rm
+KPARTX=/sbin/kpartx
 
 #=====================================================================
 # Set up shell
@@ -108,11 +122,11 @@ ME_VERSION="0.2"
 
 if `tty >/dev/null 2>&1` ; then
     COL_SUCCESS="\\033[1;32m"
-    COL_FAILURE="\\033[1;31m"
+    COL_ERROR="\\033[1;31m"
     COL_NORMAL="\\033[0;39m"
 else
     COL_SUCCESS=""
-    COL_FAILURE=""
+    COL_ERROR=""
     COL_NORMAL=""
 fi
 
@@ -120,27 +134,37 @@ fi
 # Common functions
 #=====================================================================
 
+function output {
+    if [ ! $QUIET -eq 1 ]; then
+        echo $@
+    fi
+}
+
+function outputne {
+    if [ ! $QUIET -eq 1 ]; then
+        echo -ne $@
+    fi
+}
+
 function echo_success {
-    echo -ne "${COL_SUCCESS}$@${COL_NORMAL}"
+    outputne "${COL_SUCCESS}$@${COL_NORMAL}"
 }
 
 function echo_error {
-    echo -ne "${COL_FAILURE}$@${COL_NORMAL}"
+    echo -ne "${COL_ERROR}$@${COL_NORMAL}" >&2
 }
 
 function status_success {
-    echo -ne "${COL_SUCCESS}$@${COL_NORMAL}\n"
+    outputne "${COL_SUCCESS}$@${COL_NORMAL}\n"
 }
 
-function status_failure {
-    echo -ne "${COL_FAILURE}$@${COL_NORMAL}\n"
+function status_error {
+    echo -ne "${COL_ERROR}$@${COL_NORMAL}\n" >&2
 }
 
 function error {
-    echo -ne "\n" 2>&1
-    echo_error "ERROR: $@" 2>&1
-    echo -ne "\n" 2>&1
-    exit 1
+    status_error "$@"
+    exit $EXIT_ERROR
 }
 
 function checkmount {
@@ -153,51 +177,67 @@ function checkmount {
 }
 
 function checkvolume {
-    echo -ne "Checking availability of volume..."
+    outputne "Checking availability of volume..."
 
     $LVDISPLAY $@ > /dev/null 2>&1
     if [ $? -ne 0  ]; then
-        status_failure "failed"
-        error "Volume '$LVMVOLUME' does not exist."
+        status_error "failed"
+        error "Volume '$VOLUMEPATH' does not exist."
     else
         status_success "ok"
     fi
 }
 
 function cleanup {
-    echo -ne "Deleting mount directory at $MOUNTPOINT..."
+    outputne "Deleting mount directory at $MOUNTPOINT..."
     $RM -rf $MOUNTPOINT
 
     if [ $? -eq 0 ]; then
         status_success "ok"
     else
-        status_failure "failed"
+        status_error "failed"
     fi
 }
 
-function usage_info {
+function usage {
     cat <<USAGE
-VERSION:
 $(version_info)
 
-LVM VG:     ${LVMPATH}
-MOUNT PATH: ${MOUNTPATH}
+LVM VG:     ${LVMPATH}/${GROUPNAME}
+MOUNT PATH: ${MOUNTPATH}/${GROUPNAME}
 
 DESCRIPTION:
   Automated creation and removal of LVM snapshots.
 
 USAGE:
-  $ME <command> <lvmvolume>
+  $ME <options> <command> <volumename>
+
+OPTIONS:
+  -c CONFIGFILE     Use specified config file
+  -d                Debug output
+  -e LVMEXTENSION   LVM volume extension, which will be appended to the volume name
+  -g GROUPNAME      LVM volume group name
+  -h                Show this help
+  -i MAPPERINDEX    Mapper index when using block device mode
+  -m MODE           Mode to use, either block or partition
+  -q                Be quiet
 
 COMMANDS:
-  create:     create a LVM snapshot and mount to MOUNTPATH
-  remove:     remove a LVM snapshot
+  create:     create LVM snapshot and mount to MOUNTPATH
+  remove:     remove LVM snapshot
+
+EXAMPLES:
+  $ME -c /etc/lvmsnapshot.conf create vm01
+  $ME -m block -i 1 -g vmstore create vm01
+  $ME remove vm01
 USAGE
+
+    exit $1 || exit $EXIT_FAILURE
 }
 
 function version_info {
     cat <<END
-  $ME version $ME_VERSION
+$ME version $ME_VERSION
 
 END
 }
@@ -207,44 +247,169 @@ END
 #=====================================================================
 
 if [ "$(id -u)" != 0 ]; then
-    error "This script must be run as root"
+    error "This script must be run as root."
 fi
 
 #=====================================================================
-# Parse params
+# Parse options
+#=====================================================================
+
+while getopts ':m:e:g:c:i:ndqh' OPTION ; do
+    case $OPTION in
+        m)
+            if [[ $OPTARG == "partition" || $OPTARG == "block" ]]; then
+                OPT_MODE=$OPTARG
+            else
+                error "-m: invalid argument $OPTARG"
+            fi
+            ;;
+
+        g)
+            OPT_GROUPNAME=$OPTARG
+            ;;
+
+        e)
+            OPT_LVMEXTENSION=$OPTARG
+            ;;
+
+        c)
+            if [ -r $OPTARG ]; then
+                CONFIGFILE=$OPTARG
+            else
+                error "Could not read config file $OPTARG"
+            fi
+            ;;
+
+        i)
+            OPT_MAPPERINDEX=$OPTARG
+            ;;
+
+        n)
+            OPT_NOACTION=1
+            ;;
+
+        d)
+            OPT_DEBUG=1
+            ;;
+
+        q)
+            OPT_QUIET=1
+            ;;
+
+        h)
+            usage
+            ;;
+        \?)
+            echo " \"-$OPTARG\"." >&2
+            usage $EXIT_ERROR
+            ;;
+        :)
+            echo "\"-$OPTARG\" needs an argument." >&2
+            usage $EXIT_ERROR
+            ;;
+        *)
+            status_error "This shouldn't have happened."
+            usage $EXIT_BUG
+            ;;
+    esac
+done
+
+# Shift arguments
+shift $(( OPTIND - 1 ))
+
+#=====================================================================
+# Read config file
+#=====================================================================
+
+if [ -r $CONFIGFILE ]; then
+    source $CONFIGFILE
+fi
+
+#=====================================================================
+# Map options to config
+#=====================================================================
+
+if [ ! -z $OPT_MODE ]; then
+    MODE=$OPT_MODE
+fi
+
+if [ ! -z $OPT_GROUPNAME ]; then
+    GROUPNAME=$OPT_GROUPNAME
+fi
+
+if [ ! -z $OPT_MAPPERINDEX ]; then
+    MAPPERINDEX=$OPT_MAPPERINDEX
+fi
+
+if [ ! -z $OPT_LVMEXTENSION ]; then
+    LVMEXTENSION=$OPT_LVMEXTENSION
+fi
+
+if [ ! -z $OPT_DEBUG ]; then
+    DEBUG=$OPT_DEBUG
+fi
+
+if [ ! -z $OPT_QUIET ]; then
+    QUIET=$OPT_QUIET
+fi
+
+#=====================================================================
+# Parse parameters
 #=====================================================================
 
 if [ -z $1 ]; then
-    echo "Please specify a command."
-    echo
-    usage_info
-    exit 1
+    echo_error "Please specify a command.\n"
+    usage $EXIT_ERROR
 fi
 
 if [ -z $2 ]; then
-    echo "Please specify a volume name."
-    echo
-    usage_info
-    exit 1
+    echo_error "Please specify a volume name.\n"
+    usage $EXIT_ERROR
 fi
 
-MOUNTPOINT=$MOUNTPATH/$2
-LVMVOLUME=$LVMPATH/${2}${LVMEXTENSION}
-LVMSNAPSHOT=${2}${LVMEXTENSION}${IDENTIFIER}
+#=====================================================================
+# Init
+#=====================================================================
 
+MOUNTPOINT=$MOUNTPATH/$GROUPNAME/$2
+
+VOLUMENAME=${2}${LVMEXTENSION}
+VOLUMEPATH=$LVMPATH/$GROUPNAME/$VOLUMENAME
+
+SNAPSHOTNAME=${VOLUMENAME}${IDENTIFIER}
+SNAPSHOTPATH=$LVMPATH/$GROUPNAME/$SNAPSHOTNAME
+
+if [[ $MODE == "block" ]]; then
+    MAPPEDNAME=${GROUPNAME}-${SNAPSHOTNAME//-/--}${MAPPERINDEX}
+    MAPPEDPATH=$MAPPERPATH/$MAPPEDNAME
+fi
+
+#=====================================================================
+# Status output
+#=====================================================================
+
+if [ $DEBUG -eq 1 ]; then
     cat <<END
-SETTINGS:
   MOUNTPOINT:   $MOUNTPOINT
-  LVMVOLUME:    $LVMVOLUME
-  LVMSNAPSHOT:  $LVMSNAPSHOT
-
+  VOLUMEPATH:   $VOLUMEPATH
+  SNAPSHOTPATH: $SNAPSHOTPATH
 END
 
-checkvolume $LVMVOLUME
+    if [[ $MODE == "block" ]]; then
+
+        echo "  MAPPEDPATH:   $MAPPEDPATH"
+    fi
+fi
 
 #=====================================================================
 # Program logic
 #=====================================================================
+
+if [ ! -z $OPT_NOACTION ]; then
+    exit $EXIT_SUCCESS
+fi
+
+checkvolume $VOLUMEPATH
 
 if [ $1 = "create" ]; then
 
@@ -252,49 +417,72 @@ if [ $1 = "create" ]; then
     # Create Snapshot
     #=====================================================================
 
-    echo -ne "Checking if mountpoint is mounted..."
+    outputne "Checking if mountpoint is mounted..."
 
     checkmount $MOUNTPOINT
     if [ $? -eq 0 ]; then
-        status_failure "yes"
+        status_error "yes"
         error "Mountpoint is mounted. Please unmount and re-run."
     else
         status_success "no"
     fi
 
-    echo -ne "Creating snapshot..."
-    $LVCREATE -L $SNAPSHOTSIZE -s -n $LVMSNAPSHOT $LVMVOLUME > /dev/null 2>&1
+    outputne "Creating snapshot..."
+    $LVCREATE -L $SNAPSHOTSIZE -s -n $SNAPSHOTNAME $VOLUMEPATH > /dev/null 2>&1
 
     if [ $? -eq 0 ]; then
         status_success "ok"
 
-        if [ -d $MOUNTPOINT ]; then
-            echo "Mount directory exists, ommiting mkdir."
-        else
-            echo -ne "Creating mountpoint directory..."
+        if [[ $MODE == "block" ]]; then
+            outputne "Mapping snapshot partitions..."
+            $KPARTX -a $SNAPSHOTPATH > /dev/null 2>&1
 
-            mkdir -p $MOUNTPOINT
+            if [ $? -eq 0 ]; then
+                status_success "ok"
+
+                if [ -b $MAPPEDPATH ]; then
+                    status_success "Found mapped device."
+                else
+                    error "Could not find mapped device"
+                fi
+            else
+                status_error "failed"
+                error "Error while mapping block device partitions."
+            fi
+        fi
+
+        if [ -d $MOUNTPOINT ]; then
+            output "Mount directory exists, ommiting mkdir."
+        else
+            outputne "Creating mountpoint directory..."
+
+            mkdir -p $MOUNTPOINT > /dev/null 2>&1
             if [ $? -eq 0 ]; then
                 status_success "ok"
             else
-                status_failure "failed"
+                status_error "failed"
                 error "Error while creating mountpoint directory."
             fi
         fi
 
-        echo -ne "Mounting snapshot..."
-        $MOUNT $LVMPATH/$LVMSNAPSHOT $MOUNTPOINT
+        outputne "Mounting snapshot..."
+
+        if [[ $MODE == "block" ]]; then
+            $MOUNT $MAPPEDPATH $MOUNTPOINT > /dev/null 2>&1
+        else
+            $MOUNT $SNAPSHOTPATH $MOUNTPOINT > /dev/null 2>&1
+        fi
 
         if [ $? -eq 0 ]; then
             status_success "ok"
             exit 0
         else
-            status_failure "failed"
+            status_error "failed"
             cleanup
             error "Error while mounting snapshot."
         fi
     else
-        status_failure "failed"
+        status_error "failed"
         error "Error while creating snapshot."
     fi
 
@@ -304,41 +492,53 @@ elif [ $1 = "remove" ]; then
     # Remove Snapshot
     #=====================================================================
 
-    echo -ne "Checking if mountpoint is mounted..."
+    outputne "Checking if mountpoint is mounted..."
 
     checkmount $MOUNTPOINT
     if [ $? -eq 0 ]; then
         status_success "yes"
     else
-        status_failure "no"
+        status_error "no"
         error "Mountpoint is not mounted. Please mount and re-run."
     fi
 
-    echo -ne "Unmounting snapshot..."
-    $UMOUNT $MOUNTPOINT
+    outputne "Unmounting snapshot..."
+    $UMOUNT $MOUNTPOINT > /dev/null 2>&1
 
     if [ $? -eq 0 ]; then
         status_success "ok"
 
+        if [[ $MODE == "block" ]]; then
+            outputne "Unmapping snapshot partitions..."
+            $KPARTX -d $SNAPSHOTPATH > /dev/null 2>&1
+
+            if [ $? -eq 0 ]; then
+                status_success "ok"
+            else
+                status_error "failed"
+                error "Error while unmapping block device partitions."
+            fi
+        fi
+
         cleanup
 
-        echo -ne "Removing snapshot..."
-        $LVREMOVE -f $LVMPATH/$LVMSNAPSHOT > /dev/null 2>&1
+        outputne "Removing snapshot..."
+        $LVREMOVE -f $SNAPSHOTPATH > /dev/null 2>&1
 
         if [ $? -eq 0 ]; then
             status_success "ok"
         else
-            status_failure "failed"
+            status_error "failed"
             error "Error while removing snapshot, please remove manually."
         fi
     else
-        status_failure "failed"
+        status_error "failed"
         error "Error while unmounting snapshot."
     fi
 
 else
-    echo "Unknown command: $1"
+    error "Unknown command: $1"
     echo
-    usage_info
+    usage $EXIT_ERROR
 fi
-exit
+exit $EXIT_SUCCESS
