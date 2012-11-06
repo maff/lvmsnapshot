@@ -371,7 +371,11 @@ fi
 # Init
 #=====================================================================
 
-MOUNTPOINT=$MOUNTPATH/$GROUPNAME/$2
+if [[ $MODE == "block" ]]; then
+    MOUNTPOINT=$MOUNTPATH/$GROUPNAME/$2-$MAPPERINDEX
+else
+    MOUNTPOINT=$MOUNTPATH/$GROUPNAME/$2
+fi
 
 VOLUMENAME=${2}${LVMEXTENSION}
 VOLUMEPATH=$LVMPATH/$GROUPNAME/$VOLUMENAME
