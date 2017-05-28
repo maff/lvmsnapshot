@@ -270,6 +270,7 @@ while getopts ':m:e:g:c:i:ndqh' OPTION ; do
 
         e)
             OPT_LVMEXTENSION=$OPTARG
+            ISSET_OPT_LVMEXTENSION="True"
             ;;
 
         c)
@@ -341,7 +342,7 @@ if [ ! -z $OPT_MAPPERINDEX ]; then
     MAPPERINDEX=$OPT_MAPPERINDEX
 fi
 
-if [ ! -z $OPT_LVMEXTENSION ]; then
+if [ ! -z $ISSET_OPT_LVMEXTENSION ]; then
     LVMEXTENSION=$OPT_LVMEXTENSION
 fi
 
